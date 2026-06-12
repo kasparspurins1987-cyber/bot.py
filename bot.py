@@ -4,7 +4,8 @@ import ssl
 import time
 import os
 import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server 
+import BaseHTTPRequestHandler, HTTPServer
 
 # BOT KONFIGURĀCIJA
 bota_parole = "8871535091:AAEmR6qWY-zcI5iLmli_5dJoIPuVugRt_kM"
