@@ -210,4 +210,90 @@ while True:
 print("Bots darbojas!")
 bot.polling(none_stop=True)
 
+import urllib.request
+import json
+import ssl
+import time
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+# 1. KONFIGURĀCIJA
+bota_parole = "8871535091:AAEmR6qWY-zcI5iLmli_5dJoIPuVugRt_kM"
+context = ssl._create_unverified_context()
+
+# --- RENDER.COM SERVERIS ---
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write("Bots ir aktivs".encode('utf-8'))
+
+def run_server():
+    server = HTTPServer(('0.0.0.0', 10000), SimpleHandler)
+    server.serve_forever()
+
+threading.Thread(target=run_server, daemon=True).start()
+
+# 2. DATI
+VALODU_FAILS = "lietotaju_valodas.json"
+ALERTI_FAILS = "lietotaju_alerti.json"
+ATSAUKSMJU_FAILS = "atsauksmes.json"
+
+def ieladet_failu(f_nos):
+    try:
+        with open(f_nos, 'r') as f:
+            dati = json.load(f)
+            return dati if isinstance(dati, (dict, list)) else {}
+    except: return [] if "atsauksmes" in f_nos else {}
+
+def saglabat_failu(f_nos, dati):
+    try:
+        with open(f_nos, 'w') as f: json.dump(dati, f, indent=4)
+    except: pass
+
+lietotaju_valodas = ieladet_failu(VALODU_FAILS)
+lietotaju_alerti = ieladet_failu(ALERTI_FAILS)
+atsauksmes_saraksts = ieladet_failu(ATSAUKSMJU_FAILS)
+if not isinstance(atsauksmes_saraksts, list): atsauksmes_saraksts = []
+
+# 3. TULKOJUMI UN FUNKCIJAS
+tulkojumi = {
+    'lv': {'help': "👋 Sveiks! Izmanto izvēlni.", 'fb_ok': "✅ Paldies!"},
+    'en': {'help': "👋 Welcome! Use menu.", 'fb_ok': "✅ Thanks!"},
+    'ru': {'help': "👋 Привет!", 'fb_ok': "✅ Спасибо!"},
+    'de': {'help': "👋 Hallo!", 'fb_ok': "✅ Danke!"},
+    'fr': {'help': "👋 Bonjour!", 'fb_ok': "✅ Merci!"},
+    'es': {'help': "👋 ¡Hola!", 'fb_ok': "✅ ¡Gracias!"},
+    'it': {'help': "👋 Ciao!", 'fb_ok': "✅ Grazie!"},
+    'pl': {'help': "👋 Witaj!", 'fb_ok': "✅ Dziękujemy!"},
+    'zh': {'help': "👋 您好！", 'fb_ok': "✅ 谢谢！"},
+    'hi': {'help': "👋 नमस्ते!", 'fb_ok': "✅ धन्यवाद!"}
+}
+
+def suti_zinu(chat_id, text, pogas=None):
+    try:
+        data = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
+        if pogas: data["reply_markup"] = json.dumps(pogas)
+        req = urllib.request.Request(f"https://api.telegram.org/bot{bota_parole}/sendMessage", data=json.dumps(data).encode('utf-8'), headers={'Content-Type': 'application/json'})
+        urllib.request.urlopen(req, context=context, timeout=10)
+    except: pass
+
+# 4. GALVENAIS CIKLS (Ar pareizu try-except struktūru)
+last_update_id = 0
+while True:
+    try:
+        url = f"https://api.telegram.org/bot{bota_parole}/getUpdates?offset={last_update_id + 1}&timeout=10"
+        with urllib.request.urlopen(url, context=context, timeout=20) as r:
+            atbilde = json.loads(r.read().decode('utf-8'))
+        
+        if atbilde.get("result"):
+            for update in atbilde["result"]:
+                last_update_id = update["update_id"]
+                if "message" in update:
+                    chat_id = update["message"]["chat"]["id"]
+                    suti_zinu(chat_id, "Bots darbojas!")
+        time.sleep(1)
+    except Exception as e:
+        print(f"Kļūda: {e}")
+        time.sleep(5)
 
