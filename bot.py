@@ -5,10 +5,11 @@ import time
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+# 1. KONFIGURĀCIJA
 bota_parole = "8871535091:AAEmR6qWY-zcI5iLmli_5dJoIPuVugRt_kM"
 context = ssl._create_unverified_context()
 
-# --- SERVERIS ---
+# 2. SERVERIS
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -21,7 +22,7 @@ def run_server():
 
 threading.Thread(target=run_server, daemon=True).start()
 
-# --- DATI ---
+# 3. DATI
 PRODUKTI = {
     'btc': {'id': 'bitcoin', 'name': 'Bitcoin (BTC)', 'emoji': '₿'},
     'eth': {'id': 'ethereum', 'name': 'Ethereum (ETH)', 'emoji': '♦️'},
@@ -30,7 +31,7 @@ PRODUKTI = {
     'sudrabs': {'id': 'tether-silver', 'name': 'Sudrabs (SILVER)', 'emoji': '🥈'}
 }
 
-# --- FUNKCIJAS ---
+# 4. FUNKCIJAS
 def suti_zinu(chat_id, text, pogas=None):
     try:
         data = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
@@ -46,7 +47,7 @@ def dabut_cenas():
         with urllib.request.urlopen(req, context=context, timeout=8) as r: return json.loads(r.read().decode('utf-8'))
     except: return None
 
-# --- CIKLS ---
+# 5. CIKLS
 last_update_id = 0
 while True:
     try:
@@ -64,21 +65,22 @@ while True:
                     if "start" in txt:
                         pogas = {"inline_keyboard": [
                             [{"text": "🇱🇻 LV", "callback_data": "lang_lv"}, {"text": "🇬🇧 EN", "callback_data": "lang_en"}],
-                            [{"text": "🇷🇺 RU", "callback_data": "lang_ru"}, {"text": "🇩🇪 DE", "callback_data": "lang_de"}]
+                            [{"text": "🇷🇺 RU", "callback_data": "lang_ru"}, {"text": "🇩🇪 DE", "callback_data": "lang_de"}],
+                            [{"text": "🇫🇷 FR", "callback_data": "lang_fr"}, {"text": "🇪🇸 ES", "callback_data": "lang_es"}],
+                            [{"text": "🇮🇹 IT", "callback_data": "lang_it"}, {"text": "🇵🇱 PL", "callback_data": "lang_pl"}],
+                            [{"text": "🇨🇳 ZH", "callback_data": "lang_zh"}, {"text": "🇮🇳 HI", "callback_data": "lang_hi"}]
                         ]}
-                        suti_zinu(chat_id, "Izvēlies valodu:", pogas)
+                        suti_zinu(chat_id, "Izvēlies valodu / Choose language:", pogas)
                     
-                    elif "kripto" in txt or "crypto" in txt:
+                    elif "kripto" in txt:
                         cenas = dabut_cenas()
                         if cenas:
-                            msg = "🪙 *Cenas:*\n"
+                            msg = "🪙 *Kripto cenas:*\n"
                             for k in ['btc', 'eth', 'sol']:
                                 if PRODUKTI[k]['id'] in cenas: msg += f"{PRODUKTI[k]['emoji']} {PRODUKTI[k]['name']}: {cenas[PRODUKTI[k]['id']]['usd']}$\n"
                             suti_zinu(chat_id, msg)
-                            
                     elif "feedback" in txt:
-                        suti_zinu(chat_id, "✅ Atsauksme saņemta.")
-                        
+                        suti_zinu(chat_id, "✅ Paldies par atsauksmi!")
         time.sleep(1)
     except Exception as e:
         print(f"Kļūda: {e}")
