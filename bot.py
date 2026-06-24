@@ -355,3 +355,15 @@ while True:
                         
         time.sleep(1)
     except Exception as e: print("Main loop kļūda:", e); time.sleep(5)
+-- 1. Izdzēšam veco, salauzto tabulu
+DROP TABLE IF EXISTS lietotaji;
+
+-- 2. Izveidojam jaunu, perfektu tabulu ar visām vajadzīgajām kolonnām
+CREATE TABLE lietotaji (
+    id SERIAL PRIMARY KEY,
+    chat_id TEXT UNIQUE,
+    language TEXT DEFAULT 'lv',
+    auto_pazi BOOLEAN DEFAULT TRUE,
+    portfolio JSONB DEFAULT '{}'::jsonb,
+    alerts JSONB DEFAULT '{}'::jsonb
+);
