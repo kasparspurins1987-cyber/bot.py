@@ -76,12 +76,10 @@ def update_user(chat_id, data):
 
 def suti_zinu(chat_id, text, pogas=None, photo_url=None):
     try:
-        if photo_url:
-            url = f"https://api.telegram.org/bot{bota_parole}/sendPhoto"
-            data = {"chat_id": chat_id, "photo": photo_url, "caption": text, "parse_mode": "Markdown"}
-        else:
-            url = f"https://api.telegram.org/bot{bota_parole}/sendMessage"
-            data = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown", "disable_web_page_preview": True}
+        url = f"https://api.telegram.org/bot{bota_parole}/{'sendPhoto' if photo_url else 'sendMessage'}"
+        data = {"chat_id": chat_id, "parse_mode": "Markdown", "disable_web_page_preview": True}
+        if photo_url: data["photo"] = photo_url; data["caption"] = text
+        else: data["text"] = text
         if pogas: data["reply_markup"] = json.dumps(pogas)
         req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers={'Content-Type': 'application/json'})
         urllib.request.urlopen(req, context=context, timeout=15)
@@ -97,6 +95,17 @@ def dabut_cenas():
             PEDEJAS_CENAS = dati; PEDEJA_ATJAUNOSANA = time.time(); return dati
     except: return PEDEJAS_CENAS
 
+def dabut_fng():
+    global FNG_CACHE, FNG_TIME
+    if FNG_CACHE and (time.time() - FNG_TIME < 3600): return FNG_CACHE
+    try:
+        req = urllib.request.Request("https://api.alternative.me/fng/", headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, context=context, timeout=10) as r:
+            d = json.loads(r.read().decode('utf-8'))
+            FNG_CACHE = (int(d['data'][0]['value']), d['data'][0]['value_classification'])
+            FNG_TIME = time.time(); return FNG_CACHE
+    except: return None
+
 def dabut_jaunumus():
     global NEWS_CACHE, NEWS_TIME
     if NEWS_CACHE and (time.time() - NEWS_TIME < 1800): return NEWS_CACHE
@@ -111,13 +120,35 @@ def dabut_jaunumus():
             NEWS_CACHE = msg; NEWS_TIME = time.time(); return NEWS_CACHE
     except: return "⚠️ Neizdevās ielādēt jaunumus."
 
-# ==========================================
-# 4. FONA MONITORINGS UN CIKLS
-# ==========================================
-threading.Thread(target=lambda: [time.sleep(60) or None for _ in iter(int, 1)], daemon=True).start()
+def alert_monitor():
+    while True:
+        time.sleep(60)
+        if not supabase: continue
+        c = dabut_cenas()
+        if not c: continue
+        try:
+            res = supabase.table("lietotaji").select("*").execute()
+            for user in res.data:
+                if user.get('auto_pazi') and user.get('alerts'):
+                    alerts_to_remove = []
+                    for asset, target in user['alerts'].items():
+                        curr = c.get(asset, {}).get('usd', 0)
+                        if curr > 0 and curr >= target:
+                            suti_zinu(user['chat_id'], f"🚨 **AUTO-PAZIŅOJUMS!** 🚨\n\n🎯 Tavs mērķis sasniegts!\n📈 {asset.upper()} cena šobrīd ir **{curr}$**")
+                            alerts_to_remove.append(asset)
+                    if alerts_to_remove:
+                        new_alerts = user['alerts'].copy()
+                        for a in alerts_to_remove: del new_alerts[a]
+                        update_user(user['chat_id'], {"alerts": new_alerts})
+        except: pass
+threading.Thread(target=alert_monitor, daemon=True).start()
 
+# ==========================================
+# 4. GALVENAIS CIKLS
+# ==========================================
 last_update_id = 0
 crypto_map = {'btc': 'bitcoin', 'eth': 'ethereum', 'sol': 'solana'}
+valodu_pogas = [[{"text": "🇱🇻 LV", "callback_data": "lang_lv"}, {"text": "🇬🇧 EN", "callback_data": "lang_en"}], [{"text": "🇷🇺 RU", "callback_data": "lang_ru"}, {"text": "🇩🇪 DE", "callback_data": "lang_de"}], [{"text": "🇫🇷 FR", "callback_data": "lang_fr"}, {"text": "🇪🇸 ES", "callback_data": "lang_es"}], [{"text": "🇮🇹 IT", "callback_data": "lang_it"}, {"text": "🇵🇱 PL", "callback_data": "lang_pl"}], [{"text": "🇨🇳 ZH", "callback_data": "lang_zh"}, {"text": "🇮🇳 HI", "callback_data": "lang_hi"}]]
 
 while True:
     try:
@@ -126,10 +157,14 @@ while True:
         if atbilde.get("result"):
             for update in atbilde["result"]:
                 last_update_id = update["update_id"]
-                if "message" in update:
+                if "callback_query" in update:
+                    cb = update["callback_query"]; chat_id = cb["message"]["chat"]["id"]; dati = cb["data"]; user = get_user(chat_id)
+                    if dati.startswith("lang_"): update_user(chat_id, {"language": dati.split("_")[1]}); suti_zinu(chat_id, "✅ Valoda iestatīta!", dabut_menu(dati.split("_")[1]))
+                    elif dati == "toggle_auto": new_status = not user.get('auto_pazi', True); update_user(chat_id, {"auto_pazi": new_status}); suti_zinu(chat_id, f"🔔 Auto-Paziņojumi: {'IESLĒGTI ✅' if new_status else 'IZSLĒGTI ❌'}", dabut_menu(user['language']))
+                elif "message" in update:
                     msg = update["message"]; chat_id = msg["chat"]["id"]; txt = msg.get("text", "").lower().strip(); user = get_user(chat_id); lang = user.get('language', 'lv')
                     
-                    # AI Roast funkcija
+                    # AI Roast
                     if any(x in txt for x in ["roast", "analize", "analīze"]):
                         port = user.get('portfolio', {}); monetas = {k: v for k, v in port.items() if k not in ['usd', 'last_bonus', 'streak', 'last_trivia']}
                         suti_zinu(chat_id, "🤖 *AI Analīze:* (Analizēju...)")
@@ -138,7 +173,62 @@ while True:
                         elif len(monetas) == 1: suti_zinu(chat_id, "🎢 AI: Tikai viena monēta? Klasisks kazino spēlmanis!")
                         else: suti_zinu(chat_id, "🍲 AI: Tavs portfelis izskatās pēc rasola. Diversifikācija ir laba, bet tas ir haoss!")
                     
-                    # (Šeit turpini ar savu pārējo if/elif loģiku...)
-                    elif "start" in txt: suti_zinu(chat_id, langs[lang]['txt'], dabut_menu(lang))
-                    # ... (pārējās funkcijas) ...
+                    # Loģika
+                    elif txt.startswith("buy ") or txt.startswith("pirkt "):
+                        try:
+                            parts = txt.replace(',', '.').split(); amt = float(parts[1]); coin = parts[2].lower()
+                            if coin in crypto_map:
+                                c = dabut_cenas(); price = c.get(crypto_map[coin], {}).get('usd', 0)
+                                if price > 0:
+                                    cost = amt * price; port = user.get('portfolio', {}); usd_balance = port.get('usd', 10000.0)
+                                    if usd_balance >= cost:
+                                        port['usd'] = usd_balance - cost; port[coin] = port.get(coin, 0.0) + amt
+                                        update_user(chat_id, {"portfolio": port}); suti_zinu(chat_id, f"✅ Nopirkts **{amt} {coin.upper()}** par **{cost:.2f} $**!", dabut_menu(lang))
+                                    else: suti_zinu(chat_id, f"❌ Nepietiek USD! (Ir {usd_balance:.2f} $)", dabut_menu(lang))
+                            else: suti_zinu(chat_id, "❌ Tikai btc, eth, sol.", dabut_menu(lang))
+                        except: suti_zinu(chat_id, "❌ Kļūda. Raksti: `buy 0.1 btc`", dabut_menu(lang))
+                    elif txt.startswith("sell ") or txt.startswith("pardot ") or txt.startswith("pārdot "):
+                        try:
+                            parts = txt.replace(',', '.').split(); amt = float(parts[1]); coin = parts[2].lower()
+                            if coin in crypto_map:
+                                c = dabut_cenas(); price = c.get(crypto_map[coin], {}).get('usd', 0)
+                                port = user.get('portfolio', {}); coin_balance = port.get(coin, 0.0)
+                                if coin_balance >= amt and price > 0:
+                                    revenue = amt * price; port['usd'] = port.get('usd', 10000.0) + revenue; port[coin] = coin_balance - amt
+                                    update_user(chat_id, {"portfolio": port}); suti_zinu(chat_id, f"✅ Pārdots **{amt} {coin.upper()}** par **{revenue:.2f} $**!", dabut_menu(lang))
+                                else: suti_zinu(chat_id, f"❌ Tev nav tik daudz {coin.upper()}!", dabut_menu(lang))
+                            else: suti_zinu(chat_id, "❌ Tikai btc, eth, sol.", dabut_menu(lang))
+                        except: suti_zinu(chat_id, "❌ Kļūda. Raksti: `sell 0.1 btc`", dabut_menu(lang))
+                    elif any(x in txt for x in ["kripto", "crypto", "крипто"]):
+                        c = dabut_cenas()
+                        if c: suti_zinu(chat_id, f"🪙 ₿ BTC: {c.get('bitcoin', {}).get('usd', 'N/A')}$\n♦️ ETH: {c.get('ethereum', {}).get('usd', 'N/A')}$\n☀️ SOL: {c.get('solana', {}).get('usd', 'N/A')}$", dabut_menu(lang))
+                    elif any(x in txt for x in ["metāl", "metal", "метал"]):
+                        c = dabut_cenas()
+                        if c: suti_zinu(chat_id, f"💰 Zelts: {c.get('pax-gold', {}).get('usd', 'N/A')}$\n🥈 Sudrabs: {c.get('kinesis-silver', {}).get('usd', 'N/A')}$", dabut_menu(lang))
+                    elif any(x in txt for x in ["indeks", "index", "индекс"]):
+                        suti_zinu(chat_id, "📊 *Indeksi un Forex:*\n👉 [S&P 500](https://www.tradingview.com/chart/?symbol=SP:SPX)\n👉 [EUR/USD](https://www.tradingview.com/chart/?symbol=FX:EURUSD)", dabut_menu(lang))
+                    elif any(x in txt for x in ["nafta", "oil", "нефть"]):
+                        suti_zinu(chat_id, "🛢️ *Nafta (WTI):*\n👉 [Skatīt TradingView](https://www.tradingview.com/chart/?symbol=TVC:USOIL)", dabut_menu(lang))
+                    elif any(x in txt for x in ["fear", "greed", "страх"]):
+                        fng = dabut_fng()
+                        if fng: suti_zinu(chat_id, f"🧭 F&G Indekss: {fng[0]}/100 ({fng[1]})", dabut_menu(lang))
+                    elif any(x in txt for x in ["jaunum", "news", "новост"]):
+                        suti_zinu(chat_id, dabut_jaunumus(), dabut_menu(lang))
+                    elif any(x in txt for x in ["ai čats", "ai chat", "ai чат"]):
+                        suti_zinu(chat_id, "💬 *AI Čats*\n\nLai parunātu ar mani, vienkārši sāc savu ziņu ar vārdu 'ai '.", dabut_menu(lang))
+                    elif any(x in txt for x in ["bonuss", "bonus", "бонус"]):
+                        port = user.get('portfolio', {}); last_bonus = port.get('last_bonus', 0); now = time.time()
+                        if now - last_bonus > 86400:
+                            streak = port.get('streak', 0) + 1; port['usd'] = port.get('usd', 10000.0) + (100 * streak); port['last_bonus'] = now; port['streak'] = streak; update_user(chat_id, {"portfolio": port}); suti_zinu(chat_id, f"🎁 *Bonuss!* +{100 * streak} $ (Streak: {streak})", dabut_menu(lang))
+                        else: suti_zinu(chat_id, "⏳ *Nav pieejams.*", dabut_menu(lang))
+                    elif any(x in txt for x in ["līder", "leader", "лидер"]):
+                        res = supabase.table("lietotaji").select("chat_id, portfolio").execute(); top = []
+                        for u in res.data: top.append((u['chat_id'], u['portfolio'].get('usd', 10000)))
+                        top.sort(key=lambda x: x[1], reverse=True)
+                        msg = "🏆 *Top 10:*\n" + "".join([f"{i+1}. {uid[:5]}...: {tot:.2f} $\n" for i, (uid, tot) in enumerate(top[:10])])
+                        suti_zinu(chat_id, msg, dabut_menu(lang))
+                    elif "portfel" in txt or "portfolio" in txt:
+                        port = user.get('portfolio', {}); usd_balance = port.get('usd', 10000.0); suti_zinu(chat_id, f"💼 *Portfelis:*\n💵 USD: `{usd_balance:.2f} $`", dabut_menu(lang))
+                    elif "start" in txt or "valod" in txt: suti_zinu(chat_id, langs[lang]['txt'], {"inline_keyboard": valodu_pogas})
+                    else: suti_zinu(chat_id, langs.get(lang, langs['en'])['txt'], dabut_menu(lang))
     except: time.sleep(1)
