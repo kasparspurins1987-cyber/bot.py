@@ -173,7 +173,7 @@ while True:
                         elif len(monetas) == 1: suti_zinu(chat_id, "🎢 AI: Tikai viena monēta? Klasisks kazino spēlmanis!")
                         else: suti_zinu(chat_id, "🍲 AI: Tavs portfelis izskatās pēc rasola. Diversifikācija ir laba, bet tas ir haoss!")
                     
-                    # Loģika
+                    # LOĢIKA
                     elif txt.startswith("buy ") or txt.startswith("pirkt "):
                         try:
                             parts = txt.replace(',', '.').split(); amt = float(parts[1]); coin = parts[2].lower()
@@ -229,6 +229,9 @@ while True:
                         suti_zinu(chat_id, msg, dabut_menu(lang))
                     elif "portfel" in txt or "portfolio" in txt:
                         port = user.get('portfolio', {}); usd_balance = port.get('usd', 10000.0); suti_zinu(chat_id, f"💼 *Portfelis:*\n💵 USD: `{usd_balance:.2f} $`", dabut_menu(lang))
+                    elif any(x in txt for x in ["iestat", "settings", "настройк"]):
+                        status = "IESLĒGTI ✅" if user.get('auto_pazi', True) else "IZSLĒGTI ❌"
+                        suti_zinu(chat_id, f"⚙️ *Iestatījumi:*\n🔔 Auto-Paziņojumi: {status}", {"inline_keyboard": [[{"text": "🔔 Pārslēgt Auto-Paziņojumus", "callback_data": "toggle_auto"}]]})
                     elif "start" in txt or "valod" in txt: suti_zinu(chat_id, langs[lang]['txt'], {"inline_keyboard": valodu_pogas})
                     else: suti_zinu(chat_id, langs.get(lang, langs['en'])['txt'], dabut_menu(lang))
     except: time.sleep(1)
